@@ -19,9 +19,7 @@
 
 (defvar ob-elm-process-output nil)
 
-(defvar ob-elm-eoe "\u2029")
-
-(add-to-list 'org-babel-tangle-lang-exts '("elm" . "elm"))
+(defvar ob-elm-eoe "ob-elm-eoe")
 
 (defun org-babel-execute:elm (body params)
   (let ((session (cdr (assoc :session params))))
@@ -31,21 +29,14 @@
 (defun ob-elm-eval (session body)
   (let ((result (ob-elm-eval-in-repl session body)))
     (replace-regexp-in-string
-    "^import_file([^)]+)\n" ""
-     (replace-regexp-in-string
-      "\r" ""
-      (replace-regexp-in-string
-       "\n\\(> \\)+" ""
-       result)))))
+     "\n\\(> \\)+" "" result)))
 
 (defun ob-elm-ensure-session (session params)
   (let ((name (format "*elm-%s*" session)))
     (unless (and (get-process name)
                  (process-live-p (get-process name)))
       (with-current-buffer (get-buffer-create name)
-        (make-local-variable 'process-environment)
-        (setq process-environment (cons "TERM=vt100" process-environment))
-        (apply 'start-process name name "elm-repl"))
+        (start-process name name "elm-repl"))
       (sit-for 0.5)
       (set-process-filter (get-process name) 'ob-elm-process-filter))))
 
@@ -53,7 +44,7 @@
   (setq ob-elm-process-output (concat ob-elm-process-output output)))
 
 (defun ob-elm-wait ()
-  (while (not (string-match-p ob-elm-eoe ob-elm-process-output))
+  (while (not (string-match-p (format "\"%s\" : String" ob-elm-eoe) ob-elm-process-output))
     (sit-for 0.2)))
 
 (defun ob-elm-eval-in-repl (session body)
@@ -61,10 +52,12 @@
     (setq ob-elm-process-output nil)
     (process-send-string name (format "%s\n" body))
     (accept-process-output (get-process name) nil nil 1)
+    (sit-for 1)  ;; FIXME
     (process-send-string name (format "\"%s\"\n" ob-elm-eoe))
     (ob-elm-wait)
+    (message ob-elm-process-output)
     (replace-regexp-in-string
-     (regexp-quote (format "\"%s\"" ob-elm-eoe)) ""
+     (regexp-quote (format "\"%s\" : String" ob-elm-eoe)) ""
      ob-elm-process-output)))
 
 (provide 'ob-elm)
